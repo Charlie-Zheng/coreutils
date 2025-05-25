@@ -1261,12 +1261,12 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
         );
     }
 
-    // Verify that we can open all input files.
-    // It is the correct behavior to close all files afterwards,
-    // and to reopen them at a later point. This is different from how the output file is handled,
-    // probably to prevent running out of file descriptors.
-    for file in &files {
-        open(file)?;
+    // Check for multiple output files
+    if matches
+        .get_many::<String>(options::OUTPUT)
+        .is_some_and(|v| v.len() > 1)
+    {
+        return Err(UUsageError::new(2, "sort: multiple output files specified"));
     }
 
     let output = Output::new(
@@ -1274,6 +1274,14 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
             .get_one::<String>(options::OUTPUT)
             .map(|s| s.as_str()),
     )?;
+
+    // Verify that we can open all input files.
+    // It is the correct behavior to close all files afterwards,
+    // and to reopen them at a later point. This is different from how the output file is handled,
+    // probably to prevent running out of file descriptors.
+    for file in &files {
+        open(file)?;
+    }
 
     settings.init_precomputed();
 
@@ -1427,7 +1435,8 @@ pub fn uu_app() -> Command {
                 .long(options::OUTPUT)
                 .help("write output to FILENAME instead of stdout")
                 .value_name("FILENAME")
-                .value_hint(clap::ValueHint::FilePath),
+                .value_hint(clap::ValueHint::FilePath)
+                .action(ArgAction::Append), // We will check if there is more than 1 output file later
         )
         .arg(
             Arg::new(options::REVERSE)
