@@ -1049,21 +1049,20 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 
     // check whether user specified a zero terminated list of files for input, otherwise read files from args
     let mut files: Vec<OsString> = if matches.contains_id(options::FILES0_FROM) {
-        let files0_from: Vec<OsString> = matches
-            .get_many::<OsString>(options::FILES0_FROM)
-            .map(|v| v.map(ToOwned::to_owned).collect())
+        let files0_from: OsString = matches
+            .get_one::<OsString>(options::FILES0_FROM)
+            .map(|v| v.to_owned())
             .unwrap_or_default();
 
         let mut files = Vec::new();
-        for path in &files0_from {
-            let reader = open(path)?;
-            let buf_reader = BufReader::new(reader);
-            for line in buf_reader.split(b'\0').flatten() {
-                files.push(OsString::from(
-                    std::str::from_utf8(&line)
-                        .expect("Could not parse string from zero terminated input."),
-                ));
-            }
+
+        let reader = open(files0_from)?;
+        let buf_reader = BufReader::new(reader);
+        for line in buf_reader.split(b'\0').flatten() {
+            files.push(OsString::from(
+                std::str::from_utf8(&line)
+                    .expect("Could not parse string from zero terminated input."),
+            ));
         }
         files
     } else {
@@ -1522,9 +1521,8 @@ pub fn uu_app() -> Command {
         .arg(
             Arg::new(options::FILES0_FROM)
                 .long(options::FILES0_FROM)
-                .help("read input from the files specified by NUL-terminated NUL_FILES")
-                .value_name("NUL_FILES")
-                .action(ArgAction::Append)
+                .help("read input from the files specified by NUL-terminated NUL_FILE")
+                .value_name("NUL_FILE")
                 .value_parser(ValueParser::os_string())
                 .value_hint(clap::ValueHint::FilePath),
         )
