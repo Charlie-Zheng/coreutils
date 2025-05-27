@@ -168,6 +168,9 @@ pub enum SortError {
 
     #[error("when reading file names from stdin, no file name of '-' allowed")]
     MinusInStdIn,
+
+    #[error("no input from '{}'", .file.display())]
+    EmptyInputFile { file: OsString },
 }
 
 impl UError for SortError {
@@ -1075,7 +1078,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
         }
 
         let mut files = Vec::new();
-        let reader = open(files0_from)?;
+        let reader = open(&files0_from)?;
         let buf_reader = BufReader::new(reader);
         for line in buf_reader.split(b'\0').flatten() {
             let f = std::str::from_utf8(&line)
@@ -1087,6 +1090,9 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
                 std::str::from_utf8(&line)
                     .expect("Could not parse string from zero terminated input."),
             ));
+        }
+        if files.is_empty() {
+            return Err(SortError::EmptyInputFile { file: files0_from }.into());
         }
         files
     } else {
