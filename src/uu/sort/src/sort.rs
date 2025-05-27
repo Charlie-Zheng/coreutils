@@ -1057,7 +1057,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 
     // Prevent -o/--output to be specified multiple times
     if matches
-        .get_occurrences::<String>(options::OUTPUT)
+        .get_occurrences::<OsString>(options::OUTPUT)
         .is_some_and(|out| out.len() > 1)
     {
         return Err(SortError::MultipleOutputFiles.into());
@@ -1081,7 +1081,9 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
         }
 
         let mut files = Vec::new();
-        let reader = open(&files0_from)?;
+
+        // sort errors with "cannot open: [...]" instead of "cannot read: [...]" here
+        let reader = open_openerror(&files0_from)?;
         let buf_reader = BufReader::new(reader);
         for (line_num, line) in buf_reader.split(b'\0').flatten().enumerate() {
             let f = std::str::from_utf8(&line)
@@ -1480,6 +1482,7 @@ pub fn uu_app() -> Command {
                 .short('o')
                 .long(options::OUTPUT)
                 .help("write output to FILENAME instead of stdout")
+                .value_parser(ValueParser::os_string())
                 .value_name("FILENAME")
                 .value_hint(clap::ValueHint::FilePath)
                 // To detect multiple occurrences and raise an error
@@ -1920,6 +1923,25 @@ fn print_sorted<'a, T: Iterator<Item = &'a Line<'a>>>(
 }
 
 fn open(path: impl AsRef<OsStr>) -> UResult<Box<dyn Read + Send>> {
+    let path = path.as_ref();
+    if path == STDIN_FILE {
+        let stdin = stdin();
+        return Ok(Box::new(stdin) as Box<dyn Read + Send>);
+    }
+
+    let path = Path::new(path);
+    match File::open(path) {
+        Ok(f) => Ok(Box::new(f) as Box<dyn Read + Send>),
+        Err(error) => Err(SortError::ReadFailed {
+            path: path.to_owned(),
+            error,
+        }
+        .into()),
+    }
+}
+
+fn open_openerror(path: impl AsRef<OsStr>) -> UResult<Box<dyn Read + Send>> {
+    // On error, returns an OpenFailed error instead of a ReadFailed error
     let path = path.as_ref();
     if path == STDIN_FILE {
         let stdin = stdin();
