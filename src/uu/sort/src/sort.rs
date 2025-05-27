@@ -154,6 +154,9 @@ pub enum SortError {
     #[error("cannot create temporary file in '{}':", .path.display())]
     TmpFileCreationFailed { path: PathBuf },
 
+    #[error("extra operand '{}'\nfile operands cannot be combined with --files0-from\nTry '{} --help' for more information.", .file.display(), uucore::execution_phrase())]
+    FileOperandsCombined { file: OsString },
+
     #[error("{error}")]
     Uft8Error { error: Utf8Error },
 
@@ -1016,6 +1019,8 @@ fn get_rlimit() -> UResult<usize> {
     }
 }
 
+const STDIN_FILE: &str = "-";
+
 #[uucore::main]
 #[allow(clippy::cognitive_complexity)]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
@@ -1054,8 +1059,15 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
             .map(|v| v.to_owned())
             .unwrap_or_default();
 
-        let mut files = Vec::new();
+        // Cannot combine FILES with FILES0_FROM
+        if let Some(s) = matches.get_one::<OsString>(options::FILES) {
+            return Err(SortError::FileOperandsCombined {
+                file: s.to_os_string(),
+            }
+            .into());
+        }
 
+        let mut files = Vec::new();
         let reader = open(files0_from)?;
         let buf_reader = BufReader::new(reader);
         for line in buf_reader.split(b'\0').flatten() {
@@ -1211,7 +1223,7 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 
     if files.is_empty() {
         /* if no file, default to stdin */
-        files.push("-".to_string().into());
+        files.push(OsString::from(STDIN_FILE));
     } else if settings.check && files.len() != 1 {
         return Err(UUsageError::new(
             2,
@@ -1877,7 +1889,7 @@ fn print_sorted<'a, T: Iterator<Item = &'a Line<'a>>>(
 
 fn open(path: impl AsRef<OsStr>) -> UResult<Box<dyn Read + Send>> {
     let path = path.as_ref();
-    if path == "-" {
+    if path == STDIN_FILE {
         let stdin = stdin();
         return Ok(Box::new(stdin) as Box<dyn Read + Send>);
     }
