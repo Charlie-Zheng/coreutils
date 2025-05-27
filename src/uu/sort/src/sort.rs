@@ -165,6 +165,9 @@ pub enum SortError {
 
     #[error("multiple output files specified")]
     MultipleOutputFiles,
+
+    #[error("when reading file names from stdin, no file name of '-' allowed")]
+    MinusInStdIn,
 }
 
 impl UError for SortError {
@@ -1075,6 +1078,11 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
         let reader = open(files0_from)?;
         let buf_reader = BufReader::new(reader);
         for line in buf_reader.split(b'\0').flatten() {
+            let f = std::str::from_utf8(&line)
+                .expect("Could not parse string from zero terminated input.");
+            if f == STDIN_FILE {
+                return Err(SortError::MinusInStdIn.into());
+            }
             files.push(OsString::from(
                 std::str::from_utf8(&line)
                     .expect("Could not parse string from zero terminated input."),
