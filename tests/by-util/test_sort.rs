@@ -1354,3 +1354,18 @@ fn test_multiple_output_files() {
         .fails_with_code(2)
         .stderr_is("sort: multiple output files specified\n");
 }
+
+#[test]
+// Test for GNU tests/sort/sort-files0-from.pl "f-extra-arg"
+fn test_files0_from_extra_arg() {
+    new_ucmd!()
+        .args(&["--files0-from", "-", "foo"])
+        .fails_with_code(2)
+        .stderr_contains(
+            "sort: extra operand 'foo'\nfile operands cannot be combined with --files0-from\n",
+        )
+        .no_stdout();
+    // TODO: How to get the right execution phrase?
+    // .stderr_only(format!("sort: extra operand 'foo'\nfile operands cannot be combined with --files0-from\nTry '{} --help' for more information.\n", uucore::execution_phrase()));
+}
+
