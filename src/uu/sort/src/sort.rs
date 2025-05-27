@@ -131,7 +131,10 @@ pub enum SortError {
     },
 
     #[error("open failed: {}: {}", .path.maybe_quote(), strip_errno(.error))]
-    OpenFailed { path: String, error: std::io::Error },
+    OpenFailed {
+        path: PathBuf,
+        error: std::io::Error,
+    },
 
     #[error("failed to parse key {}: {}", .key.quote(), .msg)]
     ParseKeyError { key: String, msg: String },
@@ -207,24 +210,25 @@ impl SortMode {
 }
 
 pub struct Output {
-    file: Option<(String, File)>,
+    file: Option<(OsString, File)>,
 }
 
 impl Output {
-    fn new(name: Option<&str>) -> UResult<Self> {
+    fn new(name: Option<&OsStr>) -> UResult<Self> {
         let file = if let Some(name) = name {
+            let path = Path::new(name);
             // This is different from `File::create()` because we don't truncate the output yet.
             // This allows using the output file as an input file.
             #[allow(clippy::suspicious_open_options)]
             let file = OpenOptions::new()
                 .write(true)
                 .create(true)
-                .open(name)
+                .open(path)
                 .map_err(|e| SortError::OpenFailed {
-                    path: name.to_owned(),
+                    path: path.to_owned(),
                     error: e,
                 })?;
-            Some((name.to_owned(), file))
+            Some((name.to_os_string(), file))
         } else {
             None
         };
@@ -242,9 +246,9 @@ impl Output {
         })
     }
 
-    fn as_output_name(&self) -> Option<&str> {
+    fn as_output_name(&self) -> Option<&OsStr> {
         match &self.file {
-            Some((name, _file)) => Some(name),
+            Some((name, _file)) => Some(name.as_os_str()),
             None => None,
         }
     }
@@ -1293,8 +1297,8 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 
     let output = Output::new(
         matches
-            .get_one::<String>(options::OUTPUT)
-            .map(|s| s.as_str()),
+            .get_one::<OsString>(options::OUTPUT)
+            .map(|s| s.as_os_str()),
     )?;
 
     settings.init_precomputed();
@@ -1875,7 +1879,7 @@ fn print_sorted<'a, T: Iterator<Item = &'a Line<'a>>>(
 ) -> UResult<()> {
     let output_name = output
         .as_output_name()
-        .unwrap_or("standard output")
+        .unwrap_or(OsStr::new("standard output"))
         .to_owned();
     let ctx = || format!("write failed: {}", output_name.maybe_quote());
 
@@ -1895,10 +1899,9 @@ fn open(path: impl AsRef<OsStr>) -> UResult<Box<dyn Read + Send>> {
     }
 
     let path = Path::new(path);
-
     match File::open(path) {
         Ok(f) => Ok(Box::new(f) as Box<dyn Read + Send>),
-        Err(error) => Err(SortError::ReadFailed {
+        Err(error) => Err(SortError::OpenFailed {
             path: path.to_owned(),
             error,
         }
