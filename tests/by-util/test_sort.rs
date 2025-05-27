@@ -1369,3 +1369,13 @@ fn test_files0_from_extra_arg() {
     // .stderr_only(format!("sort: extra operand 'foo'\nfile operands cannot be combined with --files0-from\nTry '{} --help' for more information.\n", uucore::execution_phrase()));
 }
 
+#[test]
+// Test for GNU tests/sort/sort-files0-from.pl "missing"
+fn test_files0_from_missing() {
+    new_ucmd!()
+        .args(&["--files0-from", "missing_file"])
+        .fails_with_code(2)
+        .stderr_only(format!(
+            "sort: open failed: missing_file: No such file or directory\n",
+        ));
+}
