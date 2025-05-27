@@ -171,6 +171,9 @@ pub enum SortError {
 
     #[error("no input from '{}'", .file.display())]
     EmptyInputFile { file: OsString },
+
+    #[error("{}:{}: invalid zero-length file name", .file.display(), .line_num)]
+    ZeroLengthFileName { file: OsString, line_num: usize },
 }
 
 impl UError for SortError {
@@ -1080,12 +1083,23 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
         let mut files = Vec::new();
         let reader = open(&files0_from)?;
         let buf_reader = BufReader::new(reader);
-        for line in buf_reader.split(b'\0').flatten() {
+        for (line_num, line) in buf_reader.split(b'\0').flatten().enumerate() {
             let f = std::str::from_utf8(&line)
                 .expect("Could not parse string from zero terminated input.");
-            if f == STDIN_FILE {
-                return Err(SortError::MinusInStdIn.into());
+            match f {
+                STDIN_FILE => {
+                    return Err(SortError::MinusInStdIn.into());
+                }
+                "" => {
+                    return Err(SortError::ZeroLengthFileName {
+                        file: files0_from,
+                        line_num: line_num + 1,
+                    }
+                    .into());
+                }
+                _ => {}
             }
+
             files.push(OsString::from(
                 std::str::from_utf8(&line)
                     .expect("Could not parse string from zero terminated input."),
